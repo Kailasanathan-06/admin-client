@@ -1,0 +1,5 @@
+{
+  "admin_url": "http://10.138.153.1:80",
+  "scan_interval": 3600,
+  "auto_start": true
+}
