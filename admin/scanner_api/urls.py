@@ -14,4 +14,6 @@ urlpatterns = [
     path("clients/<str:key>/addons/<int:addon_id>", views.AddonDeleteView.as_view(), name="api-addon-delete"),
     path("clients/<str:key>/scan-config", views.ScanConfigView.as_view(), name="api-scan-config"),
     path("clients/<str:key>/scan-now", views.TriggerScanView.as_view(), name="api-trigger-scan"),
+    path("clients/<str:key>/scan-results", views.ClientScanResultsView.as_view(), name="api-client-scan-results"),
+    path("scan/local", views.LocalScanView.as_view(), name="api-scan-local"),
 ]

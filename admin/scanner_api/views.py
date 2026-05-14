@@ -1,4 +1,5 @@
 import json
+import threading
 from datetime import datetime
 from django.utils import timezone
 from django.db.models import Q
@@ -6,6 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Client, ScanResult, AddonDevice
+from .scanner import collect_all, get_hostname, detect_platform
 
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
@@ -216,3 +218,46 @@ class TriggerScanView(APIView):
             "status": "ok",
             "message": "Scan trigger sent (client will pick up on next ping)",
         })
+
+
+class LocalScanView(APIView):
+    def post(self, request):
+        def run_scan():
+            try:
+                data = collect_all()
+                hostname = get_hostname()
+                platform_name, _ = detect_platform()
+                scan_data = {
+                    "hostname": hostname,
+                    "platform": platform_name,
+                    "scan_timestamp": datetime.now().isoformat(),
+                    "scanned_by": "admin_local",
+                    **data,
+                }
+                ScanResult.objects.create(
+                    client=None, scan_type="local", scan_data=scan_data
+                )
+            except Exception:
+                pass
+        threading.Thread(target=run_scan, daemon=True).start()
+        return Response({"status": "ok", "message": "Local scan started"})
+
+
+class ClientScanResultsView(APIView):
+    def get(self, request, key):
+        try:
+            client = Client.objects.get(registration_key=key)
+            if not client.approved:
+                return Response({"status": "error", "message": "Client not approved"},
+                                status=status.HTTP_403_FORBIDDEN)
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "Client not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        scan = ScanResult.objects.filter(
+            client__isnull=True, scan_type="local"
+        ).order_by("-created_at").first()
+        if scan:
+            from .serializers import ScanResultSerializer
+            return Response(ScanResultSerializer(scan).data)
+        return Response(None)

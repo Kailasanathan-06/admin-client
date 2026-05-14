@@ -1,7 +1,6 @@
 import json
 import urllib.request
 import urllib.error
-import time
 
 
 class Communicator:
@@ -43,14 +42,8 @@ class Communicator:
             "hostname": hostname,
         })
 
-    def send_scan(self, key, hostname, scan_type, scan_data):
-        payload = {
-            "registration_key": key,
-            "hostname": hostname,
-            "scan_type": scan_type,
-            **scan_data,
-        }
-        return self._request("POST", "/api/scan", payload, timeout=120)
+    def fetch_latest_scan(self, key):
+        return self._request("GET", f"/api/clients/{key}/scan-results")
 
     def check_status(self, key):
         return self._request("GET", f"/api/clients/{key}/status")

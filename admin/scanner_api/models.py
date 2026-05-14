@@ -30,7 +30,7 @@ class Client(models.Model):
 
 
 class ScanResult(models.Model):
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="scans")
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="scans", null=True, blank=True)
     scan_type = models.CharField(max_length=32, default="scheduled")
     scan_data = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -4,47 +4,59 @@ import time
 import json
 import threading
 from datetime import datetime
+from pathlib import Path
 
 from .key_manager import load_or_create_key, load_config, save_config
 from .config import get_admin_url, prompt_admin_url
 from .communicator import Communicator
-from .scanner import collect_all, get_hostname, detect_platform
-
 
 VERSION = "1.0.0"
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "client_output"
 
 
 def print_header():
     print("=" * 55)
     print(f"  System Scanner Pro Client v{VERSION}")
+    print("  (Viewer Mode — displays scan results from admin)")
     print("=" * 55)
     print()
 
 
-def run_manual_scan(comm, key, hostname):
-    print("  Starting manual scan...")
-    data = collect_all()
-    print("  Sending scan data to admin...")
-    result = comm.send_scan(key, hostname, "manual", data)
-    if result.get("status") == "ok":
-        print("  [OK] Scan data sent successfully.")
-    else:
-        print(f"  [FAIL] {result.get('message', 'Unknown error')}")
-    return data
+def save_output(data):
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = OUTPUT_DIR / f"scan_{ts}.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, default=str)
+    print(f"  [SAVED] {path}")
+    return path
 
 
-def run_scheduled_scan(comm, key, hostname, interval):
-    while True:
-        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Running scheduled scan...")
-        data = collect_all()
-        result = comm.send_scan(key, hostname, "scheduled", data)
-        if result.get("status") == "ok":
-            print(f"  [OK] Data sent. Next scan in {interval // 60} minutes.")
-        else:
-            print(f"  [WARN] {result.get('message', 'Send failed')}. Retrying in 60s...")
-            time.sleep(60)
-            continue
-        time.sleep(interval)
+def display_summary(data):
+    if not data or not isinstance(data, dict):
+        print("  No scan data available.")
+        return
+    scan_data = data.get("scan_data") or {}
+    hostname = scan_data.get("hostname", "unknown")
+    platform = scan_data.get("platform", "unknown")
+    ts = scan_data.get("scan_timestamp", data.get("created_at", "unknown"))
+    processor = scan_data.get("processor", {})
+    ram = scan_data.get("ram", {})
+    storage = scan_data.get("storage", {})
+    gpu = scan_data.get("gpu", [])
+    os_info = scan_data.get("os_info", {})
+
+    print(f"  Hostname:      {hostname}")
+    print(f"  Platform:      {platform}")
+    print(f"  Scanned at:    {ts}")
+    print(f"  CPU:           {processor.get('model', 'N/A')}")
+    print(f"  RAM:           {ram.get('capacity_gb', 'N/A')}")
+    print(f"  OS:            {os_info.get('version', 'N/A')}")
+    print(f"  GPU(s):        {', '.join(g.get('name', '') for g in (gpu if isinstance(gpu, list) else [])) or 'N/A'}")
+    disks = storage.get("disks", [])
+    if disks:
+        for d in disks:
+            print(f"  Disk:          {d.get('model', 'N/A')} ({d.get('size_gb', '?')} GB)")
 
 
 def heartbeat_loop(comm, key, hostname):
@@ -77,22 +89,20 @@ def main():
             config["admin_url"] = admin_url
             save_config(config)
 
-    hostname = get_hostname()
-    platform_name, _ = detect_platform()
+    hostname = "client-viewer"
     comm = Communicator(admin_url)
 
-    print(f"  Admin Server: {admin_url}")
-    print(f"  Hostname: {hostname}")
-    print(f"  Platform: {platform_name}")
+    print(f"  Admin Server:  {admin_url}")
+    print(f"  Client Key:    {key}")
     print()
 
     print("  Connecting to admin server...")
-    result = comm.register(key, hostname, platform_name)
+    result = comm.register(key, "client-viewer", "viewer")
 
     if result.get("status") == "ok":
         print("  [OK] Registered with admin server.")
     elif result.get("status") == "pending":
-        print("  [WAITING] Registration key sent. Waiting for admin approval...")
+        print("  [WAITING] Registration sent. Waiting for admin approval...")
         while True:
             time.sleep(5)
             status_res = comm.check_status(key)
@@ -109,48 +119,28 @@ def main():
     hb_thread = threading.Thread(target=heartbeat_loop, args=(comm, key, hostname), daemon=True)
     hb_thread.start()
 
-    mode = config.get("scan_mode", "scheduled")
+    print("  [VIEWER MODE] Fetching latest scan results every 30 seconds.")
+    print("  Press Ctrl+C to stop.")
+    print()
 
-    parsed = None
-    try:
-        import argparse
-        parser = argparse.ArgumentParser(description="System Scanner Pro Client")
-        parser.add_argument("--mode", choices=["manual", "scheduled", "once"], help="Scan mode")
-        parser.add_argument("--interval", type=int, help="Scan interval in seconds")
-        parser.add_argument("url", nargs="?", help="Admin server URL")
-        args, _ = parser.parse_known_args()
-        if args.mode:
-            mode = args.mode
-        if args.interval:
-            config["scan_interval"] = args.interval
-            save_config(config)
-    except Exception:
-        pass
-
-    if mode == "manual":
-        print("  [MANUAL MODE] Type 'scan' to run a scan, 'exit' to quit.")
-        while True:
-            try:
-                cmd = input("  > ").strip().lower()
-                if cmd == "scan":
-                    run_manual_scan(comm, key, hostname)
-                elif cmd == "exit":
-                    break
-                elif cmd:
-                    print(f"  Unknown command: {cmd}")
-            except (EOFError, KeyboardInterrupt):
-                break
-    elif mode == "once":
-        run_manual_scan(comm, key, hostname)
-    else:
-        interval = config.get("scan_interval", 3600)
-        print(f"  [SCHEDULED MODE] Scanning every {interval // 60} minutes.")
-        print("  Press Ctrl+C to stop.")
+    while True:
         try:
-            run_scheduled_scan(comm, key, hostname, interval)
-        except KeyboardInterrupt:
-            print("\n  Stopped.")
+            result = comm.fetch_latest_scan(key)
+            if result and result.get("id"):
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Latest scan received.")
+                display_summary(result)
+                saved = save_output(result)
+                print(f"  Output saved to: {saved}")
+            else:
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] No scan results yet.")
+        except Exception as e:
+            print(f"  [{datetime.now().strftime('%H:%M:%S')}] Error: {e}")
+        print()
+        time.sleep(30)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n  Stopped.")
