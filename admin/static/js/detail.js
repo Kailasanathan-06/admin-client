@@ -5,8 +5,8 @@ function loadClient() {
     fetch(`/api/clients/${CLIENT_KEY}`)
         .then(r => r.json())
         .then(data => {
-            clientData = data.client;
-            latestScan = data.latest_scan;
+            clientData = data;
+            latestScan = (data.scans && data.scans.length > 0) ? data.scans[0] : null;
             renderClientInfo();
             renderSystem();
             renderManual();
@@ -341,4 +341,18 @@ function deleteClient() {
         });
 }
 
+let detailRefreshInterval;
+
+function startDetailRefresh() {
+    if (detailRefreshInterval) clearInterval(detailRefreshInterval);
+    detailRefreshInterval = setInterval(() => {
+        if (latestScan) {
+            clearInterval(detailRefreshInterval);
+            return;
+        }
+        loadClient();
+    }, 3000);
+}
+
 loadClient();
+startDetailRefresh();

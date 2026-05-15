@@ -16,4 +16,5 @@ urlpatterns = [
     path("clients/<str:key>/scan-now", views.TriggerScanView.as_view(), name="api-trigger-scan"),
     path("clients/<str:key>/scan-results", views.ClientScanResultsView.as_view(), name="api-client-scan-results"),
     path("scan/local", views.LocalScanView.as_view(), name="api-scan-local"),
+    path("admin-client", views.AdminClientInfoView.as_view(), name="api-admin-client"),
 ]

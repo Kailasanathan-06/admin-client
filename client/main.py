@@ -6,9 +6,10 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from .key_manager import load_or_create_key, load_config, save_config
-from .config import get_admin_url, prompt_admin_url
-from .communicator import Communicator
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from key_manager import load_or_create_key, load_config, save_config
+from config import get_admin_url, prompt_admin_url
+from communicator import Communicator
 
 VERSION = "1.0.0"
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "client_output"
