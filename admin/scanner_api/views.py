@@ -335,6 +335,9 @@ class AdminClientInfoView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class ClientScanResultsView(APIView):
     def get(self, request, key):
+        # Get the hostname from query params for verification
+        hostname = request.query_params.get("hostname", "")
+        
         try:
             client = Client.objects.get(registration_key=key)
             if not client.approved:
@@ -344,8 +347,29 @@ class ClientScanResultsView(APIView):
             return Response({"status": "error", "message": "Client not found"},
                             status=status.HTTP_404_NOT_FOUND)
 
+        # Get the most recent scan for this specific client
         scan = ScanResult.objects.filter(client=client).order_by("-created_at").first()
+        
         if scan:
+            scan_data = scan.scan_data or {}
+            scanned_by = scan_data.get("scanned_by", "")
+            
+            # Verify this scan belongs to the correct client
+            # If the client provided a hostname, verify it matches
+            if hostname and hostname.lower() != "unknown":
+                scan_hostname = scan_data.get("hostname", "").lower()
+                if scan_hostname and scan_hostname != hostname.lower():
+                    # Scan hostname doesn't match - return empty or find matching scan
+                    # Look for a scan with matching hostname
+                    matching_scan = ScanResult.objects.filter(
+                        client=client,
+                        scan_data__hostname__iexact=hostname
+                    ).order_by("-created_at").first()
+                    if matching_scan:
+                        scan = matching_scan
+                    else:
+                        return Response({"status": "error", "message": "No scan data found for this client"})
+            
             from .serializers import ScanResultSerializer
             return Response(ScanResultSerializer(scan).data)
         return Response(None)

@@ -1,6 +1,7 @@
 import json
 import urllib.request
 import urllib.error
+import urllib.parse
 
 
 class Communicator:
@@ -42,7 +43,9 @@ class Communicator:
             "hostname": hostname,
         })
 
-    def fetch_latest_scan(self, key):
+    def fetch_latest_scan(self, key, hostname=None):
+        if hostname:
+            return self._request("GET", f"/api/clients/{key}/scan-results?hostname={urllib.parse.quote(hostname)}")
         return self._request("GET", f"/api/clients/{key}/scan-results")
 
     def check_status(self, key):
