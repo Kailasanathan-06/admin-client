@@ -145,7 +145,7 @@ def main():
 
     while True:
         try:
-            result = comm.fetch_latest_scan(key, hostname)
+            result = comm.fetch_latest_scan(key)
             if result and result.get("id"):
                 print(f"  [{datetime.now().strftime('%H:%M:%S')}] Latest scan received.")
                 display_summary(result)
