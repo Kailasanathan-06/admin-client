@@ -2,6 +2,8 @@ import sys
 import os
 import time
 import json
+import socket
+import platform
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from key_manager import load_or_create_key, load_config, save_config
 from config import get_admin_url, prompt_admin_url
 from communicator import Communicator
+from scanner import collect_all
 
 VERSION = "1.0.0"
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "client_output"
@@ -63,7 +66,23 @@ def display_summary(data):
 def heartbeat_loop(comm, key, hostname):
     while True:
         try:
-            comm.ping(key, hostname)
+            resp = comm.ping(key, hostname)
+            if resp.get("trigger_scan"):
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan requested by admin. Running scan on this machine...")
+                data = collect_all()
+                scan_data = {
+                    "hostname": hostname,
+                    "platform": platform.system(),
+                    "platform_version": platform.version(),
+                    "scan_timestamp": datetime.now().isoformat(),
+                    "scanned_by": "client_agent",
+                    **data,
+                }
+                result = comm.submit_scan(key, hostname, scan_data)
+                if result.get("status") == "ok":
+                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan data submitted successfully!")
+                else:
+                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan submission failed: {result.get('message', 'Unknown')}")
         except Exception:
             pass
         time.sleep(30)
@@ -90,7 +109,7 @@ def main():
             config["admin_url"] = admin_url
             save_config(config)
 
-    hostname = "client-viewer"
+    hostname = socket.gethostname()
     comm = Communicator(admin_url)
 
     print(f"  Admin Server:  {admin_url}")

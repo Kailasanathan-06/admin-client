@@ -48,6 +48,15 @@ class Communicator:
     def check_status(self, key):
         return self._request("GET", f"/api/clients/{key}/status")
 
+    def submit_scan(self, key, hostname, scan_data):
+        payload = {
+            "registration_key": key,
+            "hostname": hostname,
+            "scan_type": "triggered",
+            **scan_data,
+        }
+        return self._request("POST", "/api/scan", payload, timeout=120)
+
     def is_reachable(self):
         try:
             result = self._request("GET", "/api/clients", timeout=5)

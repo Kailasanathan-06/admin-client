@@ -522,25 +522,81 @@ def _get_updates():
 
 
 def _get_peripherals():
-    per = {"keyboard": [], "mouse": [], "audio": [], "webcam": [], "printers": []}
+    per = {"keyboard": [], "mouse": [], "audio": [], "webcam": [], "printers": [], "storage": [], "other_usb": []}
     try:
         if sys.platform == "win32":
             stdout, _, _ = run_powershell(
-                "Get-CimInstance Win32_PnPEntity | Select-Object Name,ClassGuid | ConvertTo-Json"
+                "Get-CimInstance Win32_PnPEntity | Select-Object Name,Description,Manufacturer,DeviceID,Status,ClassGuid,PNPClass,Service | ConvertTo-Json -Depth 3"
             )
             if stdout and stdout not in ("", "null", "[]"):
                 items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
-                for item in items if isinstance(items, list) else [items]:
-                    name = item.get("Name", "") or ""
-                    guid = (item.get("ClassGuid", "") or "").lower()
-                    if "keyboard" in guid or "keyboard" in name.lower():
-                        per["keyboard"].append({"name": name})
-                    elif "mouse" in guid or "mouse" in name.lower():
-                        per["mouse"].append({"name": name})
-                    elif "camera" in guid or "camera" in name.lower():
-                        per["webcam"].append({"name": name})
-                    elif "audio" in guid or "media" in guid:
-                        per["audio"].append({"name": name})
+                if not isinstance(items, list):
+                    items = [items]
+                for item in items:
+                    name = (item.get("Name") or "").strip()
+                    if not name:
+                        continue
+                    desc = item.get("Description") or ""
+                    mfr = item.get("Manufacturer") or ""
+                    devid = item.get("DeviceID") or ""
+                    status = item.get("Status") or ""
+                    guid = (item.get("ClassGuid") or "").lower()
+                    pnp = (item.get("PNPClass") or "").lower()
+                    is_usb = "usb" in devid.lower() or pnp == "usb"
+                    entry = {"name": name, "manufacturer": mfr, "description": desc, "status": status, "usb": is_usb}
+                    nl = name.lower()
+                    if pnp == "keyboard" or "keyboard" in guid or "keyboard" in nl:
+                        per["keyboard"].append(entry)
+                    elif pnp == "mouse" or ("mouse" in guid and "keyboard" not in guid) or "mouse" in nl:
+                        per["mouse"].append(entry)
+                    elif pnp in ("image", "camera") or "camera" in guid or "camera" in nl:
+                        per["webcam"].append(entry)
+                    elif pnp in ("media", "audioendpoint") or "audio" in guid or "media" in guid or "audio" in nl:
+                        per["audio"].append(entry)
+                    elif pnp == "printer" or "print" in nl or "printer" in devid.lower():
+                        per["printers"].append(entry)
+                    elif is_usb and pnp not in ("usb", "system", "computer", "hdc", "diskdrive"):
+                        per["other_usb"].append(entry)
+            stdout, _, _ = run_powershell(
+                "Get-CimInstance Win32_DiskDrive | Where-Object {$_.InterfaceType -eq 'USB'} | Select-Object Model,Manufacturer,SerialNumber,Size | ConvertTo-Json -Depth 3"
+            )
+            if stdout and stdout not in ("", "null", "[]"):
+                items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
+                if not isinstance(items, list):
+                    items = [items]
+                for item in items:
+                    name = (item.get("Model") or "USB Storage Device").strip()
+                    mfr = item.get("Manufacturer") or ""
+                    serial = item.get("SerialNumber") or ""
+                    size = item.get("Size") or 0
+                    size_gb = 0.0
+                    if size:
+                        try:
+                            size_gb = round(int(size) / (1024**3), 2)
+                        except (ValueError, TypeError):
+                            pass
+                    per["storage"].append({"name": name, "manufacturer": mfr.strip(), "serial": serial.strip(), "size_gb": size_gb, "usb": True, "status": "OK"})
+        elif sys.platform == "linux":
+            stdout, _, _ = run_command("lsusb 2>/dev/null", shell=True, timeout=15)
+            for line in stdout.splitlines():
+                parts = line.strip().split(None, 6)
+                if len(parts) >= 6:
+                    desc = parts[6].strip() if len(parts) > 6 else ""
+                    per["other_usb"].append({"name": desc, "manufacturer": "", "description": "", "status": "connected", "usb": True})
+            stdout, _, _ = run_command("lsblk -d -o NAME,MODEL,SERIAL,SIZE,TRAN 2>/dev/null | grep -i usb", shell=True, timeout=10)
+            for line in stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 4:
+                    per["storage"].append({"name": parts[1] if len(parts) > 1 else "USB Drive", "manufacturer": "", "serial": parts[2] if len(parts) > 2 else "", "size_gb": _parse_size(parts[3] if len(parts) > 3 else "0"), "usb": True, "status": "OK"})
+        elif sys.platform == "darwin":
+            stdout, _, _ = run_command(["system_profiler", "SPUSBDataType"], timeout=30)
+            for line in stdout.splitlines():
+                s = line.strip()
+                if s.startswith("Product:"):
+                    name = s.split(":", 1)[1].strip() if ":" in s else ""
+                    per["other_usb"].append({"name": name, "manufacturer": "", "description": "", "status": "connected", "usb": True})
+                elif s.startswith("Manufacturer:") and per["other_usb"]:
+                    per["other_usb"][-1]["manufacturer"] = s.split(":", 1)[1].strip() if ":" in s else ""
     except Exception:
         pass
     return per
