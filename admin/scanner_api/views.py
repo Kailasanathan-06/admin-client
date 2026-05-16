@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Client, ScanResult, AddonDevice, Setting
 from .scanner import collect_all, get_hostname, detect_platform
+from .diff_utils import compute_scan_diff
 
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
@@ -73,13 +74,28 @@ class PingClientView(APIView):
         serializer = PingRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        key = data["registration_key"]
 
-        Client.objects.filter(registration_key=data["registration_key"]).update(
-            status="online",
-            last_seen=timezone.now(),
-            hostname=data.get("hostname", ""),
-        )
-        return Response({"status": "ok"})
+        try:
+            client = Client.objects.get(registration_key=key)
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "Client not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        client.status = "online"
+        client.last_seen = timezone.now()
+        client.hostname = data.get("hostname", "")
+
+        trigger = client.scan_requested
+        if trigger:
+            client.scan_requested = False
+
+        client.save(update_fields=["status", "last_seen", "hostname", "scan_requested"])
+
+        resp = {"status": "ok"}
+        if trigger:
+            resp["trigger_scan"] = True
+        return Response(resp)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -147,7 +163,16 @@ class ClientDetailView(APIView):
             return Response({"status": "error", "message": "Not found"},
                             status=status.HTTP_404_NOT_FOUND)
         serializer = ClientDetailSerializer(client)
-        return Response(serializer.data)
+        data = serializer.data
+
+        scans = data.get("scans") or []
+        if len(scans) >= 2:
+            changes = compute_scan_diff(scans[1], scans[0])
+            data["scan_changes"] = changes
+        else:
+            data["scan_changes"] = []
+
+        return Response(data)
 
     def delete(self, request, key):
         deleted, _ = Client.objects.filter(registration_key=key).delete()
@@ -229,9 +254,17 @@ class ScanConfigView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class TriggerScanView(APIView):
     def post(self, request, key):
+        try:
+            client = Client.objects.get(registration_key=key)
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "Client not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        client.scan_requested = True
+        client.save(update_fields=["scan_requested"])
         return Response({
             "status": "ok",
-            "message": "Scan trigger sent (client will pick up on next ping)",
+            "message": f"Scan flag set for {client.hostname} (client will pick up on next ping)",
         })
 
 
@@ -268,6 +301,16 @@ class LocalScanView(APIView):
                 pass
         threading.Thread(target=run_scan, daemon=True).start()
         return Response({"status": "ok", "message": "Local scan started"})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ScanAllView(APIView):
+    def post(self, request):
+        count = Client.objects.filter(approved=True).update(scan_requested=True)
+        return Response({
+            "status": "ok",
+            "message": f"Scan requested for {count} client(s) (will run on next ping)",
+        })
 
 
 @method_decorator(csrf_exempt, name="dispatch")

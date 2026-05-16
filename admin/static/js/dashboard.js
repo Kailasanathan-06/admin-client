@@ -191,7 +191,10 @@ function renderClients() {
                         <span class="badge bg-dark ms-1" style="font-family:monospace;font-size:0.7rem;">${c.registration_key}</span>
                         ${isAdmin ? '<span class="badge bg-primary ms-1">Admin</span>' : ''}
                     </div>
-                    <span class="status-dot ${c.status === 'online' ? 'online' : c.status === 'pending' ? 'pending' : 'offline'}"></span>
+                    <div class="d-flex align-items-center gap-2">
+                        ${c.approved && !isAdmin ? `<button class="btn btn-sm btn-outline-info" onclick="event.stopPropagation();scanClient('${c.registration_key}')" title="Scan this client"><i class="bi bi-play-fill"></i></button>` : ''}
+                        <span class="status-dot ${c.status === 'online' ? 'online' : c.status === 'pending' ? 'pending' : 'offline'}"></span>
+                    </div>
                 </div>
                 <div class="small text-secondary">
                     <div>${c.platform || 'Unknown'}</div>
@@ -285,6 +288,36 @@ function scanAdminServer() {
             if (data.status === 'ok') {
                 showToast('Server scan started! Refresh in a moment.', 'success');
                 setTimeout(refreshClients, 3000);
+            }
+        })
+        .catch(err => showToast('Error: ' + err.message, 'danger'));
+}
+
+function scanClient(key) {
+    showToast('Scanning client...', 'info');
+    fetch(`/api/clients/${key}/scan-now`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                showToast(data.message || 'Scan started!', 'success');
+                setTimeout(refreshClients, 3000);
+            } else {
+                showToast('Error: ' + (data.message || 'Unknown'), 'danger');
+            }
+        })
+        .catch(err => showToast('Error: ' + err.message, 'danger'));
+}
+
+function scanAll() {
+    showToast('Scanning all clients...', 'info');
+    fetch('/api/scan/all', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                showToast(data.message || 'Scanning all clients!', 'success');
+                setTimeout(refreshClients, 3000);
+            } else {
+                showToast('Error: ' + (data.message || 'Unknown'), 'danger');
             }
         })
         .catch(err => showToast('Error: ' + err.message, 'danger'));

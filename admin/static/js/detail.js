@@ -8,14 +8,38 @@ function loadClient() {
             clientData = data;
             latestScan = (data.scans && data.scans.length > 0) ? data.scans[0] : null;
             renderClientInfo();
+            renderChanges();
             renderSystem();
             renderManual();
             renderAddons();
             renderNetwork();
+            renderPeripherals();
             renderSoftware();
             renderScanConfig();
         })
         .catch(err => showToast('Failed to load client: ' + err.message, 'danger'));
+}
+
+function renderChanges() {
+    const container = document.getElementById('changesContainer');
+    const list = document.getElementById('changesList');
+    const count = document.getElementById('changesCount');
+    const changes = clientData?.scan_changes || [];
+    if (changes.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = '';
+    count.textContent = changes.length;
+    list.innerHTML = changes.map(c => {
+        const isAdd = c.startsWith('+ ');
+        const isRemove = c.startsWith('\u2212 ');
+        let icon = 'bi-arrow-right-short';
+        let color = 'text-secondary';
+        if (isAdd) { icon = 'bi-plus-circle text-success'; color = 'text-success'; }
+        else if (isRemove) { icon = 'bi-dash-circle text-danger'; color = 'text-danger'; }
+        return `<div class="small mb-1 ${color}"><i class="bi ${icon} me-1"></i>${escapeHtml(c)}</div>`;
+    }).join('');
 }
 
 function renderClientInfo() {
@@ -124,15 +148,24 @@ function renderSystem() {
                 <div class="card-body">
                     <h6 class="card-subtitle mb-2 text-secondary"><i class="bi bi-shield me-1"></i>Antivirus & Scan Info</h6>
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <strong>Antivirus:</strong>
                             ${(sd.antivirus?.products || []).map(a => escapeHtml(a.name)).join(', ') || 'None detected'}
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <strong>Scan Type:</strong> ${latestScan.scan_type || 'N/A'}
+                            <br><small class="text-secondary">${sd.scanned_by === 'client_agent' ? '<span class="badge bg-success mt-1">Client Agent</span>' : sd.scanned_by === 'admin_wmi_remote' ? '<span class="badge bg-info mt-1">Remote WMI</span>' : sd.scanned_by === 'admin_local' ? '<span class="badge bg-warning text-dark mt-1">Admin Local</span>' : '<span class="badge bg-secondary mt-1">Unknown</span>'}</small>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <strong>Scanned Host:</strong> ${escapeHtml(sd.hostname || sd.os_info?.hostname || '-')}
+                        </div>
+                        <div class="col-md-2">
                             <strong>Last Scan:</strong> ${timeAgo(latestScan.created_at)}
+                        </div>
+                        <div class="col-md-2 d-flex align-items-center">
+                            <button class="btn btn-sm btn-outline-info w-100" onclick="triggerScan()">
+                                <i class="bi bi-play-fill"></i> Scan Now
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -144,6 +177,7 @@ function renderSystem() {
 
 function renderManual() {
     if (!clientData) return;
+    document.getElementById('manualHostname').value = clientData.hostname || '';
     document.getElementById('manualCost').value = clientData.purchase_cost || '';
     document.getElementById('manualPurchaseDate').value = clientData.purchase_date || '';
     document.getElementById('manualWarranty').value = clientData.warranty_expiry || '';
@@ -154,6 +188,7 @@ function renderManual() {
 
 function saveManual() {
     const data = {
+        hostname: document.getElementById('manualHostname').value || null,
         purchase_cost: document.getElementById('manualCost').value ? parseFloat(document.getElementById('manualCost').value) : null,
         purchase_date: document.getElementById('manualPurchaseDate').value || null,
         warranty_expiry: document.getElementById('manualWarranty').value || null,
@@ -262,6 +297,65 @@ function renderNetwork() {
     `).join('');
 }
 
+function renderPeripherals() {
+    const container = document.getElementById('peripheralsContent');
+    const per = latestScan?.scan_data?.peripherals || {};
+    const categories = [
+        {key: 'keyboard', icon: 'bi-keyboard', label: 'Keyboards'},
+        {key: 'mouse', icon: 'bi-mouse', label: 'Mice'},
+        {key: 'printers', icon: 'bi-printer', label: 'Printers'},
+        {key: 'storage', icon: 'bi-device-hdd', label: 'USB Storage'},
+        {key: 'audio', icon: 'bi-speaker', label: 'Audio Devices'},
+        {key: 'webcam', icon: 'bi-camera', label: 'Webcams'},
+        {key: 'other_usb', icon: 'bi-plug', label: 'Other USB Devices'},
+    ];
+    let hasDevices = false;
+    let html = '';
+    for (const cat of categories) {
+        const devices = per[cat.key] || [];
+        if (devices.length === 0) continue;
+        hasDevices = true;
+        html += `
+            <div class="mb-4">
+                <h6 class="text-secondary mb-2"><i class="bi ${cat.icon} me-1"></i>${cat.label} (${devices.length})</h6>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Manufacturer</th>
+                                <th>Description</th>
+                                ${cat.key === 'storage' ? '<th>Serial</th><th>Size</th>' : ''}
+                                <th>Status</th>
+                                <th>Connection</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${devices.map(d => {
+                                let detailRow = '';
+                                if (cat.key === 'storage') {
+                                    detailRow = `<td><code>${escapeHtml(d.serial || '')}</code></td><td>${d.size_gb ? d.size_gb + ' GB' : '-'}</td>`;
+                                }
+                                const status = d.status || 'Unknown';
+                                const statusBadge = status === 'OK' || status === 'connected' ? 'bg-success' : 'bg-secondary';
+                                return `<tr>
+                                    <td>${escapeHtml(d.name || '')}</td>
+                                    <td>${escapeHtml(d.manufacturer || '-')}</td>
+                                    <td>${escapeHtml(d.description || '-')}</td>
+                                    ${detailRow}
+                                    <td><span class="badge ${statusBadge}">${escapeHtml(status)}</span></td>
+                                    <td>${d.usb ? '<span class="badge bg-info">USB</span>' : '<span class="badge bg-secondary">Internal</span>'}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    container.innerHTML = hasDevices ? html : '<div class="text-center py-5 text-secondary">No peripherals detected</div>';
+}
+
 function renderSoftware() {
     const tbody = document.getElementById('softwareTableBody');
     const software = latestScan?.scan_data?.software || [];
@@ -319,12 +413,45 @@ function saveScanConfig() {
         });
 }
 
+let scanTriggerPoll = null;
+
 function triggerScan() {
     fetch(`/api/clients/${CLIENT_KEY}/scan-now`, { method: 'POST' })
         .then(r => r.json())
         .then(res => {
             if (res.status === 'ok') {
-                showToast('Scan triggered! Client will pick up on next heartbeat.', 'success');
+                showToast(res.message || 'Scan requested! Waiting for client...', 'info');
+                const oldId = latestScan?.id || null;
+                let attempts = 0;
+                if (scanTriggerPoll) clearInterval(scanTriggerPoll);
+                scanTriggerPoll = setInterval(() => {
+                    attempts++;
+                    if (attempts > 20) {
+                        clearInterval(scanTriggerPoll);
+                        scanTriggerPoll = null;
+                        showToast('Timed out waiting for client. Check if the client agent is running.', 'warning');
+                        return;
+                    }
+                    fetch(`/api/clients/${CLIENT_KEY}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            const newScan = (data.scans && data.scans.length > 0) ? data.scans[0] : null;
+                            if (newScan && newScan.id !== oldId) {
+                                clearInterval(scanTriggerPoll);
+                                scanTriggerPoll = null;
+                                clientData = data;
+                                latestScan = newScan;
+                                renderClientInfo();
+                                renderChanges();
+                                renderSystem();
+                                renderPeripherals();
+                                showToast('New scan data received from client!', 'success');
+                            }
+                        })
+                        .catch(() => {});
+                }, 3000);
+            } else {
+                showToast('Error: ' + (res.message || 'Unknown'), 'danger');
             }
         });
 }

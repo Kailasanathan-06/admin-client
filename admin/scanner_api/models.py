@@ -18,6 +18,7 @@ class Client(models.Model):
 
     scan_interval = models.IntegerField(default=3600)
     scan_enabled = models.BooleanField(default=True)
+    scan_requested = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

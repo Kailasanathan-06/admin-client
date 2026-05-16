@@ -35,6 +35,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
 
 
 class ManualUpdateSerializer(serializers.Serializer):
+    hostname = serializers.CharField(required=False, allow_blank=True)
     purchase_cost = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
     purchase_date = serializers.DateField(required=False, allow_null=True)
     vendor_name = serializers.CharField(required=False, allow_blank=True)
