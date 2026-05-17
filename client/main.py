@@ -69,22 +69,14 @@ def heartbeat_loop(comm, key, hostname):
             resp = comm.ping(key, hostname)
             if resp.get("trigger_scan"):
                 print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan requested by admin. Running scan on this machine...")
-                data = collect_all()
-                scan_data = {
-                    "hostname": hostname,
-                    "platform": platform.system(),
-                    "platform_version": platform.version(),
-                    "scan_timestamp": datetime.now().isoformat(),
-                    "scanned_by": "client_agent",
-                    **data,
-                }
-                result = comm.submit_scan(key, hostname, scan_data)
+                scan_data = collect_all()
+                result = comm.submit_scan(key, scan_data)
                 if result.get("status") == "ok":
                     print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan data submitted successfully!")
                 else:
                     print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan submission failed: {result.get('message', 'Unknown')}")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  [{datetime.now().strftime('%H:%M:%S')}] Heartbeat error: {e}")
         time.sleep(30)
 
 
@@ -117,7 +109,7 @@ def main():
     print()
 
     print("  Connecting to admin server...")
-    result = comm.register(key, "client-viewer", "viewer")
+    result = comm.register(key, hostname, platform.system())
 
     if result.get("status") == "ok":
         print("  [OK] Registered with admin server.")

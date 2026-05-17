@@ -49,10 +49,9 @@ class Communicator:
     def check_status(self, key):
         return self._request("GET", f"/api/clients/{key}/status")
 
-    def submit_scan(self, key, hostname, scan_data):
+    def submit_scan(self, key, scan_data):
         payload = {
             "registration_key": key,
-            "hostname": hostname,
             "scan_type": "triggered",
             **scan_data,
         }

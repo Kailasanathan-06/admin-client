@@ -54,6 +54,7 @@ def collect_all():
         "platform": platform.system(),
         "platform_version": platform.version(),
         "scan_timestamp": datetime.now().isoformat(),
+        "scanned_by": "client_agent",
     }
 
     result["processor"] = _get_processor()
@@ -270,7 +271,7 @@ def _get_storage():
                         disks.append(d)
                         current = {}
     except Exception as e:
-        pass
+        print(f"  [WARN] Storage scan failed: {e}")
     return {"disks": disks, "partitions": partitions}
 
 
@@ -329,8 +330,8 @@ def _get_motherboard():
                         mb["product"] = v
                     elif "Boot ROM Version" in k:
                         mb["bios_version"] = v
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] Motherboard scan failed: {e}")
     return mb
 
 
@@ -379,8 +380,8 @@ def _get_os_info():
                         info["version"] = v
             stdout, _, _ = run_command(["uname", "-m"])
             info["architecture"] = stdout.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] OS info scan failed: {e}")
     return info
 
 
@@ -428,8 +429,8 @@ def _get_network():
                             ip = parts[i + 1]
                             net["private_ips"].append(ip)
                             net["interfaces"].append({"name": current, "ipv4": [ip]})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] Network scan failed: {e}")
     return net
 
 
@@ -462,8 +463,8 @@ def _get_gpu():
                     k, v = line.split(":", 1)
                     if k.strip() == "Chipset Model":
                         gpus.append({"name": v.strip()})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] GPU scan failed: {e}")
     return gpus
 
 
@@ -482,8 +483,8 @@ def _get_accounts():
                         "disabled": item.get("Disabled", False),
                         "sid": item.get("SID", ""),
                     })
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] Accounts scan failed: {e}")
     return accounts
 
 
@@ -500,8 +501,8 @@ def _get_software():
                     name = item.get("DisplayName") or ""
                     if name:
                         sw.append({"name": name, "version": item.get("DisplayVersion", "") or "", "publisher": item.get("Publisher") or ""})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] Software scan failed: {e}")
     return sw
 
 
@@ -516,8 +517,8 @@ def _get_updates():
                 items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
                 for item in items if isinstance(items, list) else [items]:
                     updates.append({"kb": item.get("HotFixID", "") or "", "description": item.get("Description", "") or ""})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] Windows updates scan failed: {e}")
     return updates
 
 
@@ -597,8 +598,8 @@ def _get_peripherals():
                     per["other_usb"].append({"name": name, "manufacturer": "", "description": "", "status": "connected", "usb": True})
                 elif s.startswith("Manufacturer:") and per["other_usb"]:
                     per["other_usb"][-1]["manufacturer"] = s.split(":", 1)[1].strip() if ":" in s else ""
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] Peripherals scan failed: {e}")
     return per
 
 
@@ -613,6 +614,6 @@ def _get_antivirus():
                 items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
                 for item in items if isinstance(items, list) else [items]:
                     av["products"].append({"name": item.get("displayName", "") or ""})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [WARN] Antivirus scan failed: {e}")
     return av

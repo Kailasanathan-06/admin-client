@@ -271,32 +271,56 @@ class TriggerScanView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class LocalScanView(APIView):
     def post(self, request):
+        # Get optional client_key from request to scan specific client
+        client_key = request.data.get("client_key", "")
+        
         def run_scan():
             try:
                 data = collect_all()
                 hostname = get_hostname()
                 platform_name, _ = detect_platform()
-                scan_data = {
-                    "hostname": hostname,
-                    "platform": platform_name,
-                    "scan_timestamp": datetime.now().isoformat(),
-                    "scanned_by": "admin_local",
-                    **data,
-                }
-                admin_key = Setting.objects.get_or_create(
-                    key="admin_client_key", defaults={"value": ""}
-                )[0].value
-                if admin_key:
-                    admin_client = Client.objects.filter(registration_key=admin_key).first()
+                
+                # If client_key provided, scan that client (not admin)
+                if client_key:
+                    try:
+                        client = Client.objects.get(registration_key=client_key)
+                        scan_data = {
+                            "hostname": hostname,
+                            "platform": platform_name,
+                            "scan_timestamp": datetime.now().isoformat(),
+                            "scanned_by": "admin_local",
+                            **data,
+                        }
+                        ScanResult.objects.create(
+                            client=client, scan_type="local", scan_data=scan_data
+                        )
+                        client.last_seen = timezone.now()
+                        client.save(update_fields=["last_seen"])
+                    except Client.DoesNotExist:
+                        pass
                 else:
-                    admin_client = None
-                ScanResult.objects.create(
-                    client=admin_client, scan_type="local", scan_data=scan_data
-                )
-                if admin_client:
-                    admin_client.status = "online"
-                    admin_client.last_seen = timezone.now()
-                    admin_client.save(update_fields=["status", "last_seen"])
+                    # No client_key - scan admin's own system
+                    scan_data = {
+                        "hostname": hostname,
+                        "platform": platform_name,
+                        "scan_timestamp": datetime.now().isoformat(),
+                        "scanned_by": "admin_local",
+                        **data,
+                    }
+                    admin_key = Setting.objects.get_or_create(
+                        key="admin_client_key", defaults={"value": ""}
+                    )[0].value
+                    if admin_key:
+                        admin_client = Client.objects.filter(registration_key=admin_key).first()
+                    else:
+                        admin_client = None
+                    ScanResult.objects.create(
+                        client=admin_client, scan_type="local", scan_data=scan_data
+                    )
+                    if admin_client:
+                        admin_client.status = "online"
+                        admin_client.last_seen = timezone.now()
+                        admin_client.save(update_fields=["status", "last_seen"])
             except Exception:
                 pass
         threading.Thread(target=run_scan, daemon=True).start()
