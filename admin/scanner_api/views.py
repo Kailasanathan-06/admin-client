@@ -32,20 +32,25 @@ class RegisterClientView(APIView):
         hostname = data.get("hostname", "")
         platform_name = data.get("platform", "")
 
-        client, created = Client.objects.update_or_create(
-            registration_key=key,
-            defaults={
-                "hostname": hostname,
-                "platform": platform_name,
-                "status": "pending",
-                "last_seen": timezone.now(),
-            },
-        )
-        if not created:
+        existing = Client.objects.filter(registration_key=key).first()
+        if existing:
+            existing.hostname = hostname
+            existing.platform = platform_name
+            existing.last_seen = timezone.now()
+            existing.save(update_fields=["hostname", "platform", "last_seen"])
             return Response({
                 "status": "pending",
                 "message": "Key already registered, waiting for approval",
+                "approved": existing.approved,
             })
+
+        Client.objects.create(
+            registration_key=key,
+            hostname=hostname,
+            platform=platform_name,
+            status="pending",
+            last_seen=timezone.now(),
+        )
         return Response({
             "status": "pending",
             "message": "Registration key sent, waiting for admin approval",
@@ -262,9 +267,15 @@ class TriggerScanView(APIView):
 
         client.scan_requested = True
         client.save(update_fields=["scan_requested"])
+
+        # Re-read to confirm
+        client.refresh_from_db()
+        confirmed = client.scan_requested
+
         return Response({
             "status": "ok",
             "message": f"Scan flag set for {client.hostname} (client will pick up on next ping)",
+            "scan_requested": confirmed,
         })
 
 

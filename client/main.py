@@ -75,6 +75,9 @@ def heartbeat_loop(comm, key, hostname):
                     print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan data submitted successfully!")
                 else:
                     print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan submission failed: {result.get('message', 'Unknown')}")
+                # Ping again sooner so admin sees results faster
+                time.sleep(5)
+                continue
         except Exception as e:
             print(f"  [{datetime.now().strftime('%H:%M:%S')}] Heartbeat error: {e}")
         time.sleep(30)

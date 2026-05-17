@@ -426,7 +426,7 @@ function triggerScan() {
                 if (scanTriggerPoll) clearInterval(scanTriggerPoll);
                 scanTriggerPoll = setInterval(() => {
                     attempts++;
-                    if (attempts > 20) {
+                    if (attempts > 40) {
                         clearInterval(scanTriggerPoll);
                         scanTriggerPoll = null;
                         showToast('Timed out waiting for client. Check if the client agent is running.', 'warning');

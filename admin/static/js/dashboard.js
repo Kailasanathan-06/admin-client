@@ -294,18 +294,8 @@ function scanAdminServer() {
 }
 
 function scanClient(key) {
-    showToast('Scanning client...', 'info');
-    fetch(`/api/clients/${key}/scan-now`, { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'ok') {
-                showToast(data.message || 'Scan started!', 'success');
-                setTimeout(refreshClients, 3000);
-            } else {
-                showToast('Error: ' + (data.message || 'Unknown'), 'danger');
-            }
-        })
-        .catch(err => showToast('Error: ' + err.message, 'danger'));
+    showToast('Scan triggered! Redirecting to detail page...', 'info');
+    window.location.href = `/client/${key}`;
 }
 
 function scanAll() {

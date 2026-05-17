@@ -272,6 +272,7 @@ def _get_storage():
                         current = {}
     except Exception as e:
         print(f"  [WARN] Storage scan failed: {e}")
+        return {"disks": disks, "partitions": partitions, "_error": str(e)}
     return {"disks": disks, "partitions": partitions}
 
 
@@ -332,6 +333,7 @@ def _get_motherboard():
                         mb["bios_version"] = v
     except Exception as e:
         print(f"  [WARN] Motherboard scan failed: {e}")
+        mb["_error"] = str(e)
     return mb
 
 
@@ -382,6 +384,7 @@ def _get_os_info():
             info["architecture"] = stdout.strip()
     except Exception as e:
         print(f"  [WARN] OS info scan failed: {e}")
+        info["_error"] = str(e)
     return info
 
 
@@ -431,6 +434,7 @@ def _get_network():
                             net["interfaces"].append({"name": current, "ipv4": [ip]})
     except Exception as e:
         print(f"  [WARN] Network scan failed: {e}")
+        net["_error"] = str(e)
     return net
 
 
@@ -600,6 +604,7 @@ def _get_peripherals():
                     per["other_usb"][-1]["manufacturer"] = s.split(":", 1)[1].strip() if ":" in s else ""
     except Exception as e:
         print(f"  [WARN] Peripherals scan failed: {e}")
+        per["_error"] = str(e)
     return per
 
 
@@ -616,4 +621,5 @@ def _get_antivirus():
                     av["products"].append({"name": item.get("displayName", "") or ""})
     except Exception as e:
         print(f"  [WARN] Antivirus scan failed: {e}")
+        av["_error"] = str(e)
     return av
