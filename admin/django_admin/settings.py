@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me-in-production")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me-in-production")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "0.0.0.0,127.0.0.1,localhost").split(",")
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "0.0.0.0,127.0.0.1,localhost,*").split(",")
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -35,6 +35,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": [],
+    "DEFAULT_PAGINATION_CLASS": None,
 }
 
 ROOT_URLCONF = "django_admin.urls"
@@ -54,71 +55,16 @@ TEMPLATES = [
 ]
 
 LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/"
 
 WSGI_APPLICATION = "django_admin.wsgi.application"
 
-# ── Database (Supabase PostgreSQL with SQLite fallback) ─────────────────
-def _use_supabase():
-    url = os.getenv("SUPABASE_DATABASE_URL", "")
-    host = os.getenv("SUPABASE_DB_HOST", "")
-    pwd = os.getenv("SUPABASE_DB_PASSWORD", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if url and "user:password@host" not in url and "xxxxx" not in url:
-        return True
-    if host and "xxxxx" not in host and pwd and "your-" not in pwd:
-        return True
-    if key and "service_role_key" not in key:
-        return True
-    return False
-
-if _use_supabase():
-    DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL")
-    if DATABASE_URL:
-        import re
-        match = re.match(r"postgres(?:ql)?://(.+):(.+)@(.+):(\d+)/(.+)", DATABASE_URL)
-        if match:
-            DATABASES = {
-                "default": {
-                    "ENGINE": "django.db.backends.postgresql",
-                    "NAME": match.group(5),
-                    "USER": match.group(1),
-                    "PASSWORD": match.group(2),
-                    "HOST": match.group(3),
-                    "PORT": match.group(4),
-                    "OPTIONS": {"sslmode": "require"},
-                }
-            }
-        else:
-            DATABASES = {
-                "default": {
-                    "ENGINE": "django.db.backends.postgresql",
-                    "NAME": os.getenv("SUPABASE_DB_NAME", "postgres"),
-                    "USER": os.getenv("SUPABASE_DB_USER", "postgres"),
-                    "PASSWORD": os.getenv("SUPABASE_DB_PASSWORD", ""),
-                    "HOST": os.getenv("SUPABASE_DB_HOST", ""),
-                    "PORT": os.getenv("SUPABASE_DB_PORT", "5432"),
-                    "OPTIONS": {"sslmode": "require"},
-                }
-            }
-    else:
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": os.getenv("SUPABASE_DB_NAME", "postgres"),
-                "USER": os.getenv("SUPABASE_DB_USER", "postgres"),
-                "PASSWORD": os.getenv("SUPABASE_DB_PASSWORD", ""),
-                "HOST": os.getenv("SUPABASE_DB_HOST", ""),
-                "PORT": os.getenv("SUPABASE_DB_PORT", "5432"),
-                "OPTIONS": {"sslmode": "require"},
-            }
-        }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "data" / "scanner.db",
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "data" / "scanner.db",
     }
+}
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -129,26 +75,17 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ── Logging ─────────────────────────────────────────────────────────────
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "simple": {"format": "[{levelname}] {message}", "style": "{"},
+        "simple": {"format": "[{asctime}] {levelname} {message}", "style": "{", "datefmt": "%Y-%m-%d %H:%M:%S"},
     },
     "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "simple",
-        },
+        "console": {"class": "logging.StreamHandler", "formatter": "simple"},
     },
-    "root": {
-        "handlers": ["console"],
-        "level": "INFO",
+    "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "scanner_api": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
-
-# ── Supabase Client Settings ───────────────────────────────────────────
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")

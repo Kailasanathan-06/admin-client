@@ -2,91 +2,98 @@
 {% block title %}Settings - Scanner Pro{% endblock %}
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0"><i class="bi bi-gear me-2"></i>Settings</h4>
-</div>
+<h4 class="mb-4"><i class="bi bi-gear me-2"></i>Settings</h4>
 
-<div class="row">
+<div class="row g-4">
     <div class="col-md-6">
-        <div class="card">
+        <div class="card h-100">
             <div class="card-body">
-                <h5 class="card-title mb-3"><i class="bi bi-server me-2"></i>Server Configuration</h5>
-                <div class="mb-3">
-                    <label class="form-label">Server Port</label>
-                    <input type="number" class="form-control" id="serverPort" value="80" disabled>
-                    <div class="form-text">Change in main.py or via command-line argument.</div>
+                <h5 class="card-title mb-3"><i class="bi bi-shield-check me-2"></i>Registration</h5>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="autoApprove">
+                    <label class="form-check-label">Auto-approve new clients</label>
+                    <div class="form-text small text-secondary">New clients will be approved immediately without manual approval</div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Host</label>
-                    <input type="text" class="form-control" value="0.0.0.0" disabled>
-                    <div class="form-text">Listens on all network interfaces.</div>
+                    <label class="form-label">Stale Threshold</label>
+                    <select class="form-select" id="staleThreshold">
+                        <option value="1800">30 minutes</option>
+                        <option value="3600">1 hour</option>
+                        <option value="7200" selected>2 hours</option>
+                        <option value="14400">4 hours</option>
+                        <option value="28800">8 hours</option>
+                        <option value="86400">24 hours</option>
+                    </select>
+                    <div class="form-text small text-secondary">Clients not seen within this period are marked as stale</div>
                 </div>
+                <button class="btn btn-primary" onclick="saveSettings()"><i class="bi bi-save"></i> Save Settings</button>
             </div>
         </div>
     </div>
 
     <div class="col-md-6">
-        <div class="card">
+        <div class="card h-100">
             <div class="card-body">
-                <h5 class="card-title mb-3"><i class="bi bi-database me-2"></i>Database</h5>
+                <h5 class="card-title mb-3"><i class="bi bi-clock me-2"></i>Scanning</h5>
                 <div class="mb-3">
-                    <label class="form-label">Database Location</label>
-                    <input type="text" class="form-control" value="admin/data/scanner.db" disabled>
+                    <label class="form-label">Default Scan Interval</label>
+                    <select class="form-select" id="defaultScanInterval">
+                        <option value="300">Every 5 minutes</option>
+                        <option value="900">Every 15 minutes</option>
+                        <option value="1800">Every 30 minutes</option>
+                        <option value="3600" selected>Every 1 hour</option>
+                        <option value="7200">Every 2 hours</option>
+                        <option value="86400">Every 24 hours</option>
+                    </select>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Clients</label>
-                    <input type="text" class="form-control" id="dbClientCount" value="..." disabled>
+                <button class="btn btn-outline-success" onclick="scanAdminServer()"><i class="bi bi-server"></i> Scan This Server Now</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><i class="bi bi-people me-2"></i>Client Groups</h5>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="newGroupName" placeholder="Group name...">
+                    <button class="btn btn-outline-primary" onclick="createGroup()"><i class="bi bi-plus-lg"></i> Add</button>
                 </div>
-                <button class="btn btn-outline-danger" onclick="clearAllData()">
-                    <i class="bi bi-database-dash"></i> Clear All Data
-                </button>
+                <div id="groupsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><i class="bi bi-info-circle me-2"></i>System Info</h5>
+                <div class="mb-2">
+                    <span class="text-secondary">Admin Server Key:</span>
+                    <code id="adminClientKey" class="ms-2">---</code>
+                </div>
+                <div class="mb-2">
+                    <span class="text-secondary">Server Version:</span>
+                    <span class="ms-2">v2.1</span>
+                </div>
+                <div class="mb-2">
+                    <span class="text-secondary">Database:</span>
+                    <span class="ms-2">SQLite</span>
+                </div>
+                <div class="mb-2">
+                    <span class="text-secondary">Total Scans:</span>
+                    <span class="ms-2" id="totalScans">---</span>
+                </div>
+                <button class="btn btn-outline-danger mt-3" onclick="exportBackup()"><i class="bi bi-database-down"></i> Export Backup (JSON)</button>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title mb-3"><i class="bi bi-info-circle me-2"></i>About</h5>
-                <table class="table table-dark table-sm" style="width: auto;">
-                    <tr><td>Version</td><td>2.0</td></tr>
-                    <tr><td>Built With</td><td>Django + DRF + Bootstrap 5 + SQLite</td></tr>
-                    <tr><td>Client Communication</td><td>REST API over HTTP</td></tr>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 
 {% endblock %}
+
 {% block scripts %}
-<script>
-    function refreshDbInfo() {
-        fetch('/api/clients').then(r=>r.json()).then(d=>{
-            document.getElementById('dbClientCount').value = d.length;
-        });
-    }
-    function clearAllData() {
-        if (!confirm('Permanently delete ALL clients and scan data? This cannot be undone.')) return;
-        if (!confirm('Are you sure? This will remove every client record.')) return;
-        fetch('/api/clients').then(r=>r.json()).then(clients => {
-            const keys = clients.map(c => c.registration_key);
-            if (keys.length === 0) { showToast('No clients to delete', 'info'); return; }
-            let done = 0;
-            keys.forEach(key => {
-                fetch('/api/clients/' + key, { method: 'DELETE' })
-                    .then(r => r.json()).then(() => {
-                        done++;
-                        if (done === keys.length) {
-                            showToast('All ' + keys.length + ' clients deleted', 'success');
-                            refreshDbInfo();
-                        }
-                    });
-            });
-        });
-    }
-    refreshDbInfo();
-</script>
+<script src="/static/js/settings.js"></script>
 {% endblock %}

@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from key_manager import load_or_create_key, load_config, save_config
-from config import get_admin_url, prompt_admin_url
+from config import prompt_admin_url
 from communicator import Communicator
 from scanner import collect_all
 
@@ -21,7 +21,7 @@ OUTPUT_DIR = Path(__file__).resolve().parent.parent / "client_output"
 def print_header():
     print("=" * 55)
     print(f"  System Scanner Pro Client v{VERSION}")
-    print("  (Viewer Mode — displays scan results from admin)")
+    print("  Runs on this machine and reports to admin server")
     print("=" * 55)
     print()
 
@@ -32,7 +32,6 @@ def save_output(data):
     path = OUTPUT_DIR / f"scan_{ts}.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
-    print(f"  [SAVED] {path}")
     return path
 
 
@@ -42,7 +41,7 @@ def display_summary(data):
         return
     scan_data = data.get("scan_data") or {}
     hostname = scan_data.get("hostname", "unknown")
-    platform = scan_data.get("platform", "unknown")
+    plat = scan_data.get("platform", "unknown")
     ts = scan_data.get("scan_timestamp", data.get("created_at", "unknown"))
     processor = scan_data.get("processor", {})
     ram = scan_data.get("ram", {})
@@ -51,35 +50,42 @@ def display_summary(data):
     os_info = scan_data.get("os_info", {})
 
     print(f"  Hostname:      {hostname}")
-    print(f"  Platform:      {platform}")
+    print(f"  Platform:      {plat}")
     print(f"  Scanned at:    {ts}")
     print(f"  CPU:           {processor.get('model', 'N/A')}")
     print(f"  RAM:           {ram.get('capacity_gb', 'N/A')}")
     print(f"  OS:            {os_info.get('version', 'N/A')}")
-    print(f"  GPU(s):        {', '.join(g.get('name', '') for g in (gpu if isinstance(gpu, list) else [])) or 'N/A'}")
+    gpus = gpu if isinstance(gpu, list) else []
+    print(f"  GPU(s):        {', '.join(g.get('name', '') for g in gpus) or 'N/A'}")
     disks = storage.get("disks", [])
-    if disks:
-        for d in disks:
-            print(f"  Disk:          {d.get('model', 'N/A')} ({d.get('size_gb', '?')} GB)")
+    for d in disks:
+        print(f"  Disk:          {d.get('model', 'N/A')} ({d.get('size_gb', '?')} GB)")
 
 
 def heartbeat_loop(comm, key, hostname):
+    consecutive_errors = 0
     while True:
         try:
-            resp = comm.ping(key, hostname)
+            resp = comm.ping(key, hostname, VERSION)
+            consecutive_errors = 0
+
             if resp.get("trigger_scan"):
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan requested by admin. Running scan on this machine...")
+                now = datetime.now().strftime('%H:%M:%S')
+                print(f"  [{now}] Admin requested scan. Running...")
                 scan_data = collect_all()
                 result = comm.submit_scan(key, scan_data)
                 if result.get("status") == "ok":
-                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan data submitted successfully!")
+                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan submitted successfully!")
                 else:
-                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan submission failed: {result.get('message', 'Unknown')}")
-                # Ping again sooner so admin sees results faster
+                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan failed: {result.get('message', 'Unknown')}")
                 time.sleep(5)
                 continue
         except Exception as e:
-            print(f"  [{datetime.now().strftime('%H:%M:%S')}] Heartbeat error: {e}")
+            consecutive_errors += 1
+            if consecutive_errors <= 3:
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Heartbeat error: {e}")
+            elif consecutive_errors == 4:
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Multiple heartbeat errors — will suppress further errors until reconnected")
         time.sleep(30)
 
 
@@ -109,45 +115,55 @@ def main():
 
     print(f"  Admin Server:  {admin_url}")
     print(f"  Client Key:    {key}")
+    print(f"  Client Version: {VERSION}")
     print()
 
-    print("  Connecting to admin server...")
-    result = comm.register(key, hostname, platform.system())
+    if not comm.is_reachable():
+        print(f"  [ERROR] Cannot reach admin server at {admin_url}")
+        print("  Check the URL and make sure the admin server is running.")
+        print("  Edit client_config.json to change the admin URL.")
+        input("  Press Enter to exit...")
+        return
 
-    if result.get("status") == "ok":
-        print("  [OK] Registered with admin server.")
+    print("  Connecting to admin server...")
+    result = comm.register(key, hostname, platform.system(), VERSION)
+
+    if result.get("status") in ("ok",):
+        print("  [OK] Registered and approved.")
     elif result.get("status") == "pending":
-        print("  [WAITING] Registration sent. Waiting for admin approval...")
-        while True:
-            time.sleep(5)
-            status_res = comm.check_status(key)
-            if status_res.get("status") == "approved":
-                print("  [OK] Admin approved registration.")
-                break
-            elif status_res.get("status") == "error":
-                pass
+        if result.get("auto_approved"):
+            print("  [OK] Auto-approved by admin server.")
+        else:
+            print("  [WAITING] Registration sent. Waiting for admin approval...")
+            while True:
+                time.sleep(5)
+                status_res = comm.check_status(key)
+                if status_res.get("status") == "approved":
+                    print("  [OK] Admin approved registration.")
+                    break
+                elif status_res.get("status") == "error":
+                    pass
     else:
         print(f"  [WARN] {result.get('message', 'Registration pending')}")
 
     print()
-    print("  Starting heartbeat...")
-    hb_thread = threading.Thread(target=heartbeat_loop, args=(comm, key, hostname), daemon=True)
-    hb_thread.start()
-
-    print("  [VIEWER MODE] Fetching latest scan results every 30 seconds.")
+    print("  Starting heartbeat loop (every 30 seconds)...")
     print("  Press Ctrl+C to stop.")
     print()
+
+    hb_thread = threading.Thread(target=heartbeat_loop, args=(comm, key, hostname), daemon=True)
+    hb_thread.start()
 
     while True:
         try:
             result = comm.fetch_latest_scan(key)
             if result and result.get("id"):
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Latest scan received.")
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan data received.")
                 display_summary(result)
                 saved = save_output(result)
                 print(f"  Output saved to: {saved}")
             else:
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] No scan results yet.")
+                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Waiting for scan data...")
         except Exception as e:
             print(f"  [{datetime.now().strftime('%H:%M:%S')}] Error: {e}")
         print()

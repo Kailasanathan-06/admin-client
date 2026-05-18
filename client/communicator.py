@@ -1,7 +1,6 @@
 import json
 import urllib.request
 import urllib.error
-import urllib.parse
 
 
 class Communicator:
@@ -30,17 +29,19 @@ class Communicator:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def register(self, key, hostname, platform_name):
+    def register(self, key, hostname, platform_name, client_version=""):
         return self._request("POST", "/api/register", {
             "registration_key": key,
             "hostname": hostname,
             "platform": platform_name,
+            "client_version": client_version,
         })
 
-    def ping(self, key, hostname):
+    def ping(self, key, hostname, client_version=""):
         return self._request("POST", "/api/ping", {
             "registration_key": key,
             "hostname": hostname,
+            "client_version": client_version,
         })
 
     def fetch_latest_scan(self, key):
@@ -50,16 +51,12 @@ class Communicator:
         return self._request("GET", f"/api/clients/{key}/status")
 
     def submit_scan(self, key, scan_data):
-        payload = {
-            "registration_key": key,
-            "scan_type": "triggered",
-            **scan_data,
-        }
+        payload = {"registration_key": key, "scan_type": "scheduled", **scan_data}
         return self._request("POST", "/api/scan", payload, timeout=120)
 
     def is_reachable(self):
         try:
-            result = self._request("GET", "/api/clients", timeout=5)
-            return result.get("status") != "error"
+            self._request("GET", "/api/clients", timeout=5)
+            return True
         except Exception:
             return False

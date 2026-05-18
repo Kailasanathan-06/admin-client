@@ -16,7 +16,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 55)
-    print("  System Scanner Pro Admin Panel v2.0")
+    print("  System Scanner Pro Admin Panel v2.1")
     print("  (Django + DRF + Bootstrap 5)")
     print("=" * 55)
     print()
@@ -30,7 +30,7 @@ def main():
     from django.contrib.auth.models import User
     if not User.objects.filter(is_superuser=True).exists():
         User.objects.create_superuser(args.username, "", args.password)
-        print(f"  Default admin created: {args.username} / {args.password}")
+        print(f"  Admin user created: {args.username} / {args.password}")
 
     from scanner_api.views import ensure_admin_client, admin_self_scan
     admin_key = ensure_admin_client()
@@ -46,10 +46,7 @@ def main():
     import webbrowser
     webbrowser.open(f"http://127.0.0.1:{args.port}")
 
-    cmd = [
-        sys.executable, str(manage_py), "runserver",
-        f"{args.host}:{args.port}",
-    ]
+    cmd = [sys.executable, str(manage_py), "runserver", f"{args.host}:{args.port}"]
     if args.debug:
         cmd.append("--noreload")
 

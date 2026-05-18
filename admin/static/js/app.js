@@ -32,14 +32,13 @@ function escapeHtml(text) {
     return d.innerHTML;
 }
 
-function showLoading() {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.classList.remove('d-none');
-}
-
-function hideLoading() {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.classList.add('d-none');
+function formatBytes(bytes) {
+    if (!bytes || isNaN(bytes)) return 'N/A';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let val = bytes;
+    while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+    return val.toFixed(1) + ' ' + units[i];
 }
 
 function toggleTheme() {

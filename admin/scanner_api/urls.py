@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path("register", views.RegisterClientView.as_view(), name="api-register"),
     path("approve", views.ApproveClientView.as_view(), name="api-approve"),
+    path("approve-multiple", views.ApproveMultipleView.as_view(), name="api-approve-multiple"),
     path("ping", views.PingClientView.as_view(), name="api-ping"),
     path("scan", views.SubmitScanView.as_view(), name="api-scan"),
     path("clients", views.ClientListView.as_view(), name="api-clients"),
@@ -15,7 +16,12 @@ urlpatterns = [
     path("clients/<str:key>/scan-config", views.ScanConfigView.as_view(), name="api-scan-config"),
     path("clients/<str:key>/scan-now", views.TriggerScanView.as_view(), name="api-trigger-scan"),
     path("clients/<str:key>/scan-results", views.ClientScanResultsView.as_view(), name="api-client-scan-results"),
+    path("clients/delete-multiple", views.DeleteMultipleView.as_view(), name="api-delete-multiple"),
     path("scan/local", views.LocalScanView.as_view(), name="api-scan-local"),
     path("scan/all", views.ScanAllView.as_view(), name="api-scan-all"),
     path("admin-client", views.AdminClientInfoView.as_view(), name="api-admin-client"),
+    path("activity-log", views.ActivityLogView.as_view(), name="api-activity-log"),
+    path("groups", views.GroupListView.as_view(), name="api-groups"),
+    path("groups/<int:group_id>", views.GroupDeleteView.as_view(), name="api-group-delete"),
+    path("settings", views.SettingsView.as_view(), name="api-settings"),
 ]

@@ -1,16 +1,29 @@
+# API Route Constants
 API_REGISTER = "/api/register"
 API_APPROVE = "/api/approve"
+API_APPROVE_MULTIPLE = "/api/approve-multiple"
 API_PING = "/api/ping"
 API_SCAN = "/api/scan"
 API_CLIENTS = "/api/clients"
 API_CLIENT_DETAIL = "/api/clients/<key>"
+API_CLIENT_STATUS = "/api/clients/<key>/status"
 API_MANUAL_UPDATE = "/api/clients/<key>/manual"
 API_ADDONS = "/api/clients/<key>/addons"
-API_ADDON_DELETE = "/api/clients/<key>/addons/<int:addon_id>"
+API_ADDON_DELETE = "/api/clients/<key>/addons/<addon_id>"
 API_SCAN_CONFIG = "/api/clients/<key>/scan-config"
 API_TRIGGER_SCAN = "/api/clients/<key>/scan-now"
-API_DELETE_CLIENT = "/api/clients/<key>/delete"
+API_SCAN_RESULTS = "/api/clients/<key>/scan-results"
+API_SCAN_LOCAL = "/api/scan/local"
+API_SCAN_ALL = "/api/scan/all"
+API_DELETE_CLIENT = "/api/clients/<key>"
+API_DELETE_MULTIPLE = "/api/clients/delete-multiple"
+API_ADMIN_CLIENT = "/api/admin-client"
+API_ACTIVITY_LOG = "/api/activity-log"
+API_GROUPS = "/api/groups"
+API_GROUP_DELETE = "/api/groups/<group_id>"
+API_SETTINGS = "/api/settings"
 
 KEY_LENGTH = 8
 HEARTBEAT_INTERVAL = 30
 DEFAULT_SCAN_INTERVAL = 3600
+CLIENT_VERSION = "1.0.0"

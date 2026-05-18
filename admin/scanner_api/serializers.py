@@ -1,5 +1,22 @@
 from rest_framework import serializers
-from .models import Client, ScanResult, AddonDevice, Setting
+from .models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup, Setting
+
+
+class ClientGroupSerializer(serializers.ModelSerializer):
+    client_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClientGroup
+        fields = ["id", "name", "description", "client_count", "created_at"]
+
+    def get_client_count(self, obj):
+        return obj.clients.count()
+
+
+class ScanResultSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScanResult
+        fields = ["id", "scan_type", "scan_data", "created_at"]
 
 
 class AddonDeviceSerializer(serializers.ModelSerializer):
@@ -8,26 +25,35 @@ class AddonDeviceSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class ScanResultSerializer(serializers.ModelSerializer):
+class ActivityLogSerializer(serializers.ModelSerializer):
+    client_hostname = serializers.CharField(source="client.hostname", read_only=True, default="")
+
     class Meta:
-        model = ScanResult
-        fields = "__all__"
-        extra_kwargs = {"scan_data": {"read_only": False}}
+        model = ActivityLog
+        fields = ["id", "action", "client_hostname", "details", "created_at"]
 
 
 class ClientListSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source="group.name", read_only=True, default=None)
+    tags_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
+    is_stale = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = Client
         fields = [
-            "id", "registration_key", "hostname", "platform",
-            "status", "last_seen", "approved", "created_at",
-            "purchase_cost", "vendor_name", "notes",
+            "id", "registration_key", "hostname", "platform", "status",
+            "last_seen", "approved", "group", "group_name", "tags_list",
+            "is_stale", "client_version", "cpu_model", "ram_info",
+            "purchase_cost", "vendor_name", "notes", "created_at",
         ]
 
 
 class ClientDetailSerializer(serializers.ModelSerializer):
     scans = ScanResultSerializer(many=True, read_only=True)
     addons = AddonDeviceSerializer(many=True, read_only=True)
+    group_name = serializers.CharField(source="group.name", read_only=True, default=None)
+    tags_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
+    is_stale = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Client
@@ -42,10 +68,12 @@ class ManualUpdateSerializer(serializers.Serializer):
     vendor_contact = serializers.CharField(required=False, allow_blank=True)
     warranty_expiry = serializers.DateField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+    group = serializers.PrimaryKeyRelatedField(queryset=ClientGroup.objects.all(), required=False, allow_null=True)
+    tags = serializers.CharField(required=False, allow_blank=True)
 
 
 class ScanConfigSerializer(serializers.Serializer):
-    interval_seconds = serializers.IntegerField(default=3600)
+    interval_seconds = serializers.IntegerField(min_value=60, max_value=604800, default=3600)
     enabled = serializers.BooleanField(default=True)
 
 
@@ -53,15 +81,21 @@ class RegisterRequestSerializer(serializers.Serializer):
     registration_key = serializers.CharField()
     hostname = serializers.CharField(required=False, default="")
     platform = serializers.CharField(required=False, default="")
+    client_version = serializers.CharField(required=False, default="")
 
 
 class ApproveRequestSerializer(serializers.Serializer):
     registration_key = serializers.CharField()
 
 
+class ApproveMultipleSerializer(serializers.Serializer):
+    registration_keys = serializers.ListField(child=serializers.CharField())
+
+
 class PingRequestSerializer(serializers.Serializer):
     registration_key = serializers.CharField()
     hostname = serializers.CharField(required=False, default="")
+    client_version = serializers.CharField(required=False, default="")
 
 
 class ScanSubmitSerializer(serializers.Serializer):
@@ -75,7 +109,6 @@ class ScanSubmitSerializer(serializers.Serializer):
     processor = serializers.JSONField(required=False, default=dict)
     ram = serializers.JSONField(required=False, default=dict)
     storage = serializers.JSONField(required=False, default=dict)
-    partitions = serializers.ListField(required=False, default=list)
     gpu = serializers.ListField(required=False, default=list)
     motherboard = serializers.JSONField(required=False, default=dict)
     os_info = serializers.JSONField(required=False, default=dict)
@@ -84,12 +117,10 @@ class ScanSubmitSerializer(serializers.Serializer):
     peripherals = serializers.JSONField(required=False, default=dict)
     software = serializers.ListField(required=False, default=list)
     updates = serializers.ListField(required=False, default=list)
-    monitor = serializers.JSONField(required=False, default=dict)
     antivirus = serializers.JSONField(required=False, default=dict)
-    raw_json = serializers.CharField(required=False, default="")
 
 
-class SettingSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Setting
-        fields = "__all__"
+class SettingSerializer(serializers.Serializer):
+    auto_approve = serializers.BooleanField(required=False)
+    stale_threshold_seconds = serializers.IntegerField(required=False, min_value=300)
+    scan_all_interval = serializers.IntegerField(required=False, min_value=300)
