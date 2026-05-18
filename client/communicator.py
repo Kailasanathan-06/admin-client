@@ -54,9 +54,16 @@ class Communicator:
         payload = {"registration_key": key, "scan_type": "scheduled", **scan_data}
         return self._request("POST", "/api/scan", payload, timeout=120)
 
+    def get_scan_config(self, key):
+        return self._request("GET", f"/api/clients/{key}/scan-config")
+
     def is_reachable(self):
         try:
-            self._request("GET", "/api/clients", timeout=5)
-            return True
+            import urllib.request
+            import urllib.error
+            url = f"{self.admin_url}/api/clients"
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=5):
+                return True
         except Exception:
             return False

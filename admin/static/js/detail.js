@@ -362,7 +362,8 @@ function deleteClient() {
     if (!confirm('Permanently delete this client and all data?')) return;
     fetch(`/api/clients/${CLIENT_KEY}`, { method: 'DELETE' }).then(r => r.json()).then(res => {
         if (res.status === 'ok') { showToast('Client deleted', 'success'); window.location.href = '/'; }
-    });
+        else { showToast('Delete failed: ' + (res.message || 'Unknown error'), 'danger'); }
+    }).catch(err => showToast('Delete failed: ' + err.message, 'danger'));
 }
 
 function startDetailRefresh() {

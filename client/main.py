@@ -147,6 +147,15 @@ def main():
         print(f"  [WARN] {result.get('message', 'Registration pending')}")
 
     print()
+    print("  Performing initial scan...")
+    initial_data = collect_all()
+    init_result = comm.submit_scan(key, initial_data)
+    if init_result.get("status") == "ok":
+        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Initial scan submitted successfully!")
+    else:
+        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Initial scan failed: {init_result.get('message', 'Unknown')}")
+    print()
+
     print("  Starting heartbeat loop (every 30 seconds)...")
     print("  Press Ctrl+C to stop.")
     print()
@@ -154,20 +163,44 @@ def main():
     hb_thread = threading.Thread(target=heartbeat_loop, args=(comm, key, hostname), daemon=True)
     hb_thread.start()
 
+    last_scan = time.time()
     while True:
         try:
+            now = datetime.now().strftime('%H:%M:%S')
+            config = comm.get_scan_config(key)
+            interval = config.get("interval_seconds", 3600)
+            enabled = config.get("enabled", True)
+
+            elapsed = time.time() - last_scan
+            if enabled and elapsed >= interval:
+                print(f"  [{now}] Scheduled scan starting...")
+                scan_data = collect_all()
+                result = comm.submit_scan(key, scan_data)
+                if result.get("status") == "ok":
+                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scheduled scan submitted!")
+                else:
+                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan failed: {result.get('message', 'Unknown')}")
+                last_scan = time.time()
+
             result = comm.fetch_latest_scan(key)
             if result and result.get("id"):
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan data received.")
+                print(f"  [{now}] Scan data received.")
                 display_summary(result)
                 saved = save_output(result)
                 print(f"  Output saved to: {saved}")
             else:
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Waiting for scan data...")
+                next_min = max(1, int((interval - elapsed) / 60)) if enabled else 30
+                print(f"  [{now}] Waiting... next scan in ~{next_min}m")
+
         except Exception as e:
             print(f"  [{datetime.now().strftime('%H:%M:%S')}] Error: {e}")
         print()
-        time.sleep(30)
+
+        if enabled:
+            next_in = max(1, interval - (time.time() - last_scan))
+            time.sleep(min(30, next_in))
+        else:
+            time.sleep(30)
 
 
 if __name__ == "__main__":

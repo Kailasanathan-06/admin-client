@@ -244,11 +244,15 @@ function bulkDelete() {
     fetch('/api/clients/delete-multiple', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ registration_keys: keys })
-    }).then(r => r.json()).then(() => {
-        showToast(`${keys.length} client(s) deleted`, 'success');
-        clearSelection();
-        refreshClients();
-    });
+    }).then(r => r.json()).then(res => {
+        if (res.status === 'ok') {
+            showToast(`${keys.length} client(s) deleted`, 'success');
+            clearSelection();
+            refreshClients();
+        } else {
+            showToast('Delete failed: ' + (res.message || 'Unknown error'), 'danger');
+        }
+    }).catch(err => showToast('Delete failed: ' + err.message, 'danger'));
 }
 
 function registerClient() {
