@@ -119,6 +119,16 @@ class ScanSubmitSerializer(serializers.Serializer):
     updates = serializers.ListField(required=False, default=list)
     antivirus = serializers.JSONField(required=False, default=dict)
 
+    def validate(self, attrs):
+        known = set(self.fields.keys())
+        extra = {}
+        for k, v in self.initial_data.items():
+            if k not in known:
+                extra[k] = v
+        if extra:
+            attrs['_extra'] = extra
+        return attrs
+
 
 class SettingSerializer(serializers.Serializer):
     auto_approve = serializers.BooleanField(required=False)

@@ -124,7 +124,8 @@ class SubmitScanView(APIView):
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        scan_data = {"hostname": hostname, "scan_type": scan_type, **data}
+        extra = data.pop("_extra", {})
+        scan_data = {"hostname": hostname, "scan_type": scan_type, **data, **extra}
         ScanResult.objects.create(client=client, scan_type=scan_type, scan_data=scan_data)
 
         client.status = "online"
