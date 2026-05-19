@@ -129,8 +129,6 @@ def main():
     result = comm.register(key, hostname, platform.system(), VERSION)
 
     if result.get("status") in ("ok",):
-        print("  [OK] Registered and approved.")
-    elif result.get("status") == "pending":
         if result.get("auto_approved"):
             print("  [OK] Auto-approved by admin server.")
         else:
@@ -143,6 +141,16 @@ def main():
                     break
                 elif status_res.get("status") == "error":
                     pass
+    elif result.get("status") == "pending":
+        print("  [WAITING] Registration pending admin approval...")
+        while True:
+            time.sleep(5)
+            status_res = comm.check_status(key)
+            if status_res.get("status") == "approved":
+                print("  [OK] Admin approved registration.")
+                break
+            elif status_res.get("status") == "error":
+                pass
     else:
         print(f"  [WARN] {result.get('message', 'Registration pending')}")
 

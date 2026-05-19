@@ -25,8 +25,8 @@ function refreshClients() {
 
 function renderStats() {
     const total = clients.length;
-    const online = clients.filter(c => c.status === 'online').length;
-    const pending = clients.filter(c => c.status === 'pending' || !c.approved).length;
+    const online = clients.filter(c => !c.is_stale && c.status === 'online').length;
+    const pending = clients.filter(c => !c.is_stale && c.status === 'pending').length;
     const offline = total - online - pending;
     document.getElementById('totalClients').textContent = total;
     document.getElementById('onlineClients').textContent = online;
@@ -35,8 +35,8 @@ function renderStats() {
 }
 
 function renderCharts() {
-    const online = clients.filter(c => c.status === 'online').length;
-    const pending = clients.filter(c => c.status === 'pending' || !c.approved).length;
+    const online = clients.filter(c => !c.is_stale && c.status === 'online').length;
+    const pending = clients.filter(c => !c.is_stale && c.status === 'pending').length;
     const offline = clients.length - online - pending;
 
     if (!statusChart) {
@@ -141,10 +141,10 @@ function renderClients() {
 
     const filtered = clients.filter(c => {
         if (searchTerm && !c.hostname?.toLowerCase().includes(searchTerm) && !c.registration_key?.toLowerCase().includes(searchTerm) && !c.platform?.toLowerCase().includes(searchTerm) && !(c.tags_list || []).some(t => t.toLowerCase().includes(searchTerm))) return false;
-        if (statusFilter === 'online' && c.status !== 'online') return false;
-        if (statusFilter === 'offline' && (c.status !== 'offline' && !c.is_stale)) return false;
+        if (statusFilter === 'online' && (c.is_stale || c.status !== 'online')) return false;
+        if (statusFilter === 'offline' && !c.is_stale && c.status !== 'offline') return false;
         if (statusFilter === 'stale' && !c.is_stale) return false;
-        if (statusFilter === 'pending' && c.status !== 'pending') return false;
+        if (statusFilter === 'pending' && (c.is_stale || c.status !== 'pending')) return false;
         if (groupFilter !== 'all' && c.group !== parseInt(groupFilter)) return false;
         return true;
     });

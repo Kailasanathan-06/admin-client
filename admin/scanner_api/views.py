@@ -370,7 +370,7 @@ class SettingsView(APIView):
     def get(self, request):
         return Response({
             "auto_approve": Setting.get("auto_approve", "false").lower() == "true",
-            "stale_threshold_seconds": int(Setting.get("stale_threshold_seconds", "7200")),
+            "stale_threshold_seconds": int(Setting.get("stale_threshold_seconds", "120")),
             "scan_all_interval": int(Setting.get("scan_all_interval", "86400")),
             "admin_client_key": Setting.get("admin_client_key", ""),
         })
