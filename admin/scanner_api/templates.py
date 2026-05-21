@@ -19,6 +19,21 @@ def settings_page(request):
     return render(request, "settings.html")
 
 
+@login_required
+def admin_page(request):
+    return render(request, "admin_page.html")
+
+
+@login_required
+def account_view(request):
+    return render(request, "account.html")
+
+
+@login_required
+def scan_history(request):
+    return render(request, "scan_history.html")
+
+
 def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username")

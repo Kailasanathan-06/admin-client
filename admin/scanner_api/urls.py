@@ -7,6 +7,7 @@ urlpatterns = [
     path("approve-multiple", views.ApproveMultipleView.as_view(), name="api-approve-multiple"),
     path("ping", views.PingClientView.as_view(), name="api-ping"),
     path("scan", views.SubmitScanView.as_view(), name="api-scan"),
+    path("scan/history", views.ScanHistoryView.as_view(), name="api-scan-history"),
     path("clients", views.ClientListView.as_view(), name="api-clients"),
     path("clients/delete-multiple", views.DeleteMultipleView.as_view(), name="api-delete-multiple"),
     path("clients/<str:key>/status", views.ClientStatusView.as_view(), name="api-client-status"),
@@ -24,4 +25,9 @@ urlpatterns = [
     path("groups", views.GroupListView.as_view(), name="api-groups"),
     path("groups/<int:group_id>", views.GroupDeleteView.as_view(), name="api-group-delete"),
     path("settings", views.SettingsView.as_view(), name="api-settings"),
+    path("admin/users", views.AdminUsersView.as_view(), name="api-admin-users"),
+    path("admin/users/<int:user_id>", views.AdminUserDeleteView.as_view(), name="api-admin-user-delete"),
+    path("admin/stats", views.AdminStatsView.as_view(), name="api-admin-stats"),
+    path("admin/scan-changes", views.ScanChangesView.as_view(), name="api-admin-scan-changes"),
+    path("admin/change-password", views.ChangePasswordView.as_view(), name="api-change-password"),
 ]

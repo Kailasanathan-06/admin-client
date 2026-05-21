@@ -9,13 +9,15 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from shared.runtime import is_frozen, get_client_data_dir
 from key_manager import load_or_create_key, load_config, save_config
 from config import prompt_admin_url
 from communicator import Communicator
 from scanner import collect_all
 
 VERSION = "1.0.0"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "client_output"
+OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
 def print_header():
@@ -27,9 +29,9 @@ def print_header():
 
 
 def save_output(data):
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = OUTPUT_DIR / f"scan_{ts}.json"
+    path = os.path.join(OUTPUT_DIR, f"scan_{ts}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
     return path
@@ -111,19 +113,24 @@ def main():
             save_config(config)
 
     hostname = socket.gethostname()
-    comm = Communicator(admin_url)
 
-    print(f"  Admin Server:  {admin_url}")
-    print(f"  Client Key:    {key}")
-    print(f"  Client Version: {VERSION}")
-    print()
+    while True:
+        comm = Communicator(admin_url)
 
-    if not comm.is_reachable():
+        print(f"  Admin Server:  {admin_url}")
+        print(f"  Client Key:    {key}")
+        print(f"  Client Version: {VERSION}")
+        print()
+
+        if comm.is_reachable():
+            break
+
         print(f"  [ERROR] Cannot reach admin server at {admin_url}")
         print("  Check the URL and make sure the admin server is running.")
-        print("  Edit client_config.json to change the admin URL.")
-        input("  Press Enter to exit...")
-        return
+        print()
+        admin_url = prompt_admin_url()
+        config["admin_url"] = admin_url
+        save_config(config)
 
     print("  Connecting to admin server...")
     result = comm.register(key, hostname, platform.system(), VERSION)

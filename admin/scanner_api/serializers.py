@@ -19,6 +19,16 @@ class ScanResultSerializer(serializers.ModelSerializer):
         fields = ["id", "scan_type", "scan_data", "created_at"]
 
 
+class ScanHistorySerializer(serializers.ModelSerializer):
+    client_hostname = serializers.CharField(source="client.hostname", read_only=True, default="")
+    client_key = serializers.CharField(source="client.registration_key", read_only=True, default="")
+    client_platform = serializers.CharField(source="client.platform", read_only=True, default="")
+
+    class Meta:
+        model = ScanResult
+        fields = ["id", "scan_type", "scan_data", "created_at", "client_hostname", "client_key", "client_platform"]
+
+
 class AddonDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = AddonDevice

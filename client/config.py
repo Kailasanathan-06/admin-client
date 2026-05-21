@@ -1,17 +1,15 @@
 import sys
 import os
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from shared.runtime import is_frozen, get_client_data_dir
+
 
 def get_admin_url():
-    config_path = os.path.join(os.path.dirname(__file__), "client_config.json")
+    config_path = os.path.join(get_client_data_dir(), "client_config.json")
     defaults = {"admin_url": "http://localhost:80"}
     try:
-        if os.path.exists("client_config.json"):
-            import json
-            with open("client_config.json") as f:
-                data = json.load(f)
-                defaults.update(data)
-        elif os.path.exists(config_path):
+        if os.path.exists(config_path):
             import json
             with open(config_path) as f:
                 data = json.load(f)

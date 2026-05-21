@@ -8,4 +8,7 @@ urlpatterns = [
     path("", templates.dashboard, name="dashboard"),
     path("client/<str:key>/", templates.client_detail, name="client-detail"),
     path("settings/", templates.settings_page, name="settings"),
+    path("admin-page/", templates.admin_page, name="admin-page"),
+    path("account/", templates.account_view, name="account"),
+    path("scans/", templates.scan_history, name="scan-history"),
 ]

@@ -8,5 +8,6 @@ admin/data/
 client_config.json
 client_key.json
 .env
-*.spec
+# *.spec files are now tracked (needed for builds)
+# build/*.spec
 .blackboxcli/

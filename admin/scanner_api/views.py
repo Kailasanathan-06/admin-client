@@ -8,6 +8,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db import models
 from .models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup, Setting
 from .diff_utils import compute_scan_diff
 from .serializers import (
@@ -384,6 +385,140 @@ class SettingsView(APIView):
         if "scan_all_interval" in data:
             Setting.set("scan_all_interval", str(data["scan_all_interval"]))
         ActivityLog.objects.create(action="setting_change", details="Settings updated")
+        return Response({"status": "ok"})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class AdminUsersView(APIView):
+    def get(self, request):
+        from django.contrib.auth.models import User
+        users = User.objects.all().values("id", "username", "is_superuser", "is_active", "date_joined")
+        return Response(list(users))
+
+    def post(self, request):
+        from django.contrib.auth.models import User
+        username = request.data.get("username", "").strip()
+        password = request.data.get("password", "")
+        is_superuser = request.data.get("is_superuser", False)
+        if not username or not password:
+            return Response({"status": "error", "message": "Username and password required"}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(username=username).exists():
+            return Response({"status": "error", "message": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.create_user(username=username, password=password)
+        user.is_superuser = is_superuser
+        user.save()
+        ActivityLog.objects.create(action="login", details=f"Admin user {username} created")
+        return Response({"status": "ok", "user": {"id": user.id, "username": user.username, "is_superuser": user.is_superuser}})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class AdminUserDeleteView(APIView):
+    def delete(self, request, user_id):
+        from django.contrib.auth.models import User
+        try:
+            user = User.objects.get(id=user_id)
+            username = user.username
+            user.delete()
+            ActivityLog.objects.create(action="delete", details=f"Admin user {username} deleted")
+            return Response({"status": "ok"})
+        except User.DoesNotExist:
+            return Response({"status": "error", "message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class AdminStatsView(APIView):
+    def get(self, request):
+        from django.contrib.auth.models import User
+        from .models import Client, ScanResult, ActivityLog
+        return Response({
+            "total_admins": User.objects.filter(is_superuser=True).count(),
+            "total_clients": Client.objects.count(),
+            "total_scans": ScanResult.objects.count(),
+            "total_logs": ActivityLog.objects.count(),
+            "clients_online": Client.objects.filter(approved=True, status__in=["online", "pending"]).count(),
+            "clients_pending": Client.objects.filter(approved=False).count(),
+            "clients_offline": Client.objects.filter(approved=True, status="offline").count(),
+        })
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ScanChangesView(APIView):
+    def get(self, request):
+        from .serializers import ScanResultSerializer
+        changes = []
+        clients = Client.objects.filter(approved=True, scans__isnull=False).distinct()
+
+        for client in clients:
+            scans = ScanResult.objects.filter(client=client).order_by("-created_at")[:2]
+            if len(scans) < 2:
+                continue
+            old_data = scans[1].scan_data or {}
+            new_data = scans[0].scan_data or {}
+            if old_data == new_data:
+                continue
+            from .diff_utils import compute_scan_diff
+            diffs = compute_scan_diff(
+                {"scan_data": old_data},
+                {"scan_data": new_data},
+            )
+            if diffs:
+                changes.append({
+                    "client_hostname": client.hostname,
+                    "client_key": client.registration_key,
+                    "client_platform": client.platform,
+                    "last_scan": scans[0].created_at.isoformat(),
+                    "previous_scan": scans[1].created_at.isoformat(),
+                    "change_count": len(diffs),
+                    "changes": diffs[:50],
+                })
+
+        changes.sort(key=lambda c: c["last_scan"], reverse=True)
+        return Response(changes)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ScanHistoryView(APIView):
+    def get(self, request):
+        query = request.GET.get("q", "").strip().lower()
+        scan_type = request.GET.get("type", "").strip().lower()
+        limit = int(request.GET.get("limit", 100))
+
+        scans = ScanResult.objects.select_related("client").all().order_by("-created_at")
+
+        if query:
+            scans = scans.filter(
+                models.Q(client__hostname__icontains=query) |
+                models.Q(client__registration_key__icontains=query) |
+                models.Q(client__platform__icontains=query)
+            )
+        if scan_type:
+            scans = scans.filter(scan_type=scan_type)
+
+        scans = scans[:limit]
+        from .serializers import ScanHistorySerializer
+        return Response(ScanHistorySerializer(scans, many=True).data)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ChangePasswordView(APIView):
+    def post(self, request):
+        from django.contrib.auth.models import User
+        user_id = request.data.get("user_id")
+        old_password = request.data.get("old_password", "")
+        new_password = request.data.get("new_password", "")
+        if not user_id or not old_password or not new_password:
+            return Response({"status": "error", "message": "All fields required"}, status=status.HTTP_400_BAD_REQUEST)
+        if len(new_password) < 4:
+            return Response({"status": "error", "message": "Password too short"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"status": "error", "message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not user.check_password(old_password):
+            return Response({"status": "error", "message": "Current password is incorrect"}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        ActivityLog.objects.create(action="update", details=f"Password changed for user {user.username}")
         return Response({"status": "ok"})
 
 
